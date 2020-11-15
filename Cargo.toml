@@ -6,6 +6,9 @@ authors = [
 ]
 edition = "2018"
 readme = "README.md"
+description = "A simple S3 signer in Rust"
+repository = "https://github.com/media-io/s3-signer"
+license = "MIT"
 
 [dependencies]
 async-h1 = "2.1.4"
