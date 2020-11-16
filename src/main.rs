@@ -138,6 +138,9 @@ async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_t
     async_h1::accept(stream.clone(), |request| async move {
         log::trace!("{:?}", request);
 
+        if request.url().path() == "/" {
+            return Ok(Response::new(StatusCode::Ok));
+        }
         if request.url().path() == "/api/sign" {
             if let Ok(QueryParameters { bucket, path }) = request.query() {
                 let credentials = AwsCredentials::new(
