@@ -9,7 +9,7 @@ use async_std::{
   task,
 };
 use clap::{App, Arg};
-use http_types::{Response, StatusCode};
+use http_types::{Method, Response, StatusCode};
 use rusoto_credential::AwsCredentials;
 use rusoto_s3::{
   util::{PreSignedRequest, PreSignedRequestOption},
@@ -158,9 +158,20 @@ async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_t
     log::trace!("{:?}", request);
 
     if request.url().path() == "/" {
-      return Ok(Response::new(StatusCode::Ok));
+      let response = Response::new(StatusCode::Ok);
+      return Ok(response);
     }
+
     if request.url().path() == "/api/sign" {
+      if request.method() == Method::Options {
+        let mut response = Response::new(StatusCode::Ok);
+        response.insert_header("Allow", "GET, OPTIONS, HEAD");
+        response.insert_header("Access-Control-Allow-Origin", "*");
+        response.insert_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+        response.insert_header("Access-Control-Allow-Headers", "*");
+        return Ok(response);
+      }
+
       if let Ok(QueryParameters { bucket, path }) = request.query() {
         let credentials = AwsCredentials::new(
           &s3_configuration.s3_access_key_id,
@@ -184,6 +195,9 @@ async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_t
         let body_response = PresignedUrlResponse { url: presigned_url };
 
         let mut response = Response::new(StatusCode::Ok);
+        response.insert_header("Access-Control-Allow-Headers", "*");
+        response.insert_header("Access-Control-Allow-Origin", "*");
+        response.insert_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
         response.insert_header("Content-Type", "application/json");
         response.set_body(serde_json::to_string(&body_response).unwrap().as_bytes());
         Ok(response)
