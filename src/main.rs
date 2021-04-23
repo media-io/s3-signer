@@ -10,10 +10,10 @@ use async_std::{
 };
 use clap::{App, Arg};
 use http_types::{Method, Response, StatusCode};
-use rusoto_credential::AwsCredentials;
+use rusoto_credential::{AwsCredentials, StaticProvider};
 use rusoto_s3::{
   util::{PreSignedRequest, PreSignedRequestOption},
-  GetObjectRequest,
+  GetObjectRequest, ListObjectsV2Request, S3Client, S3,
 };
 use rusoto_signature::Region;
 use simple_logger::SimpleLogger;
@@ -88,7 +88,7 @@ async fn main() -> http_types::Result<()> {
     1 => log::LevelFilter::Warn,
     2 => log::LevelFilter::Info,
     3 => log::LevelFilter::Debug,
-    4 | _ => log::LevelFilter::Trace,
+    _ => log::LevelFilter::Trace,
   };
 
   SimpleLogger::new().with_level(log_level).init().unwrap();
@@ -144,6 +144,7 @@ async fn main() -> http_types::Result<()> {
 struct QueryParameters {
   bucket: String,
   path: String,
+  list: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -158,7 +159,8 @@ async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_t
     log::trace!("{:?}", request);
 
     if request.url().path() == "/" {
-      let response = Response::new(StatusCode::Ok);
+      let mut response = Response::new(StatusCode::Ok);
+      response.set_body(format!("S3 Signer (version {})", built_info::PKG_VERSION));
       return Ok(response);
     }
 
@@ -167,12 +169,15 @@ async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_t
         let mut response = Response::new(StatusCode::Ok);
         response.insert_header("Allow", "GET, OPTIONS, HEAD");
         response.insert_header("Access-Control-Allow-Origin", "*");
-        response.insert_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+        response.insert_header(
+          "Access-Control-Allow-Methods",
+          "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+        );
         response.insert_header("Access-Control-Allow-Headers", "*");
         return Ok(response);
       }
 
-      if let Ok(QueryParameters { bucket, path }) = request.query() {
+      if let Ok(QueryParameters { bucket, path, list }) = request.query() {
         let credentials = AwsCredentials::new(
           &s3_configuration.s3_access_key_id,
           &s3_configuration.s3_secret_access_key,
@@ -180,13 +185,21 @@ async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_t
           None,
         );
 
-        let get_object_request = GetObjectRequest {
+        if list {
+          let result = list_directory(&s3_configuration, &bucket, Some(path));
+
+          let mut response = Response::new(StatusCode::Ok);
+          response.insert_header("Content-Type", "application/json");
+          response.set_body(result);
+          return Ok(response);
+        }
+
+        let get_object = GetObjectRequest {
           bucket,
           key: path,
           ..Default::default()
         };
-
-        let presigned_url = get_object_request.get_presigned_url(
+        let presigned_url = get_object.get_presigned_url(
           &s3_configuration.s3_region,
           &credentials,
           &PreSignedRequestOption::default(),
@@ -197,7 +210,10 @@ async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_t
         let mut response = Response::new(StatusCode::Ok);
         response.insert_header("Access-Control-Allow-Headers", "*");
         response.insert_header("Access-Control-Allow-Origin", "*");
-        response.insert_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+        response.insert_header(
+          "Access-Control-Allow-Methods",
+          "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+        );
         response.insert_header("Content-Type", "application/json");
         response.set_body(serde_json::to_string(&body_response).unwrap().as_bytes());
         Ok(response)
@@ -210,4 +226,80 @@ async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_t
   })
   .await?;
   Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct Object {
+  path: String,
+  is_dir: bool,
+}
+
+fn list_directory(
+  s3_configuration: &S3Configuration,
+  bucket: &str,
+  source_prefix: Option<String>,
+) -> String {
+  use tokio::runtime::Runtime;
+
+  let runtime = Runtime::new().unwrap();
+
+  runtime.block_on(async {
+    let credentials = AwsCredentials::new(
+      &s3_configuration.s3_access_key_id,
+      &s3_configuration.s3_secret_access_key,
+      None,
+      None,
+    );
+
+    let list_objects = ListObjectsV2Request {
+      bucket: bucket.to_string(),
+      delimiter: Some(String::from("/")),
+      prefix: source_prefix.clone(),
+      ..Default::default()
+    };
+
+    let http_client = rusoto_core::request::HttpClient::new().unwrap();
+    let credentials: StaticProvider = credentials.into();
+
+    let client = S3Client::new_with(http_client, credentials, s3_configuration.s3_region.clone());
+
+    let response = client.list_objects_v2(list_objects).await.unwrap();
+
+    let mut objects = response
+      .contents
+      .map(|contents| {
+        contents
+          .iter()
+          .map(|content| build_object(&content.key, &source_prefix, false))
+          .filter_map(|content| content)
+          .collect::<Vec<_>>()
+      })
+      .unwrap_or_default();
+
+    let mut folders = response
+      .common_prefixes
+      .map(|prefixes| {
+        prefixes
+          .iter()
+          .map(|prefix| build_object(&prefix.prefix, &source_prefix, true))
+          .filter_map(|content| content)
+          .collect::<Vec<_>>()
+      })
+      .unwrap_or_default();
+
+    objects.append(&mut folders);
+
+    serde_json::to_string(&objects).unwrap()
+  })
+}
+
+fn build_object(path: &Option<String>, prefix: &Option<String>, is_dir: bool) -> Option<Object> {
+  let prefix_len = prefix.as_ref().map(|s| s.len()).unwrap_or(0);
+  let path = path.clone().unwrap_or_else(|| "".to_string()).split_off(prefix_len);
+
+  if path.is_empty() {
+    return None;
+  }
+
+  Some(Object { path, is_dir })
 }
