@@ -1,21 +1,17 @@
-#[macro_use]
-extern crate clap;
-#[macro_use]
-extern crate serde_derive;
-
 use async_std::{
   net::{TcpListener, TcpStream},
   prelude::*,
   task,
 };
-use clap::{App, Arg};
+use clap::Parser;
 use http_types::{Method, Response, StatusCode};
 use rusoto_credential::{AwsCredentials, StaticProvider};
 use rusoto_s3::{
   util::{PreSignedRequest, PreSignedRequestOption},
-  GetObjectRequest, ListObjectsV2Request, S3Client, S3,
+  GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3Client, S3,
 };
 use rusoto_signature::Region;
+use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 use std::str::FromStr;
 
@@ -30,60 +26,57 @@ struct S3Configuration {
   s3_region: Region,
 }
 
+/// S3 Signer for AWS and other S3 compatible storage systems
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+  /// Sets the AWS Access Key ID
+  #[clap(
+    long,
+    value_parser,
+    name = "aws-access-key-id",
+    env = "AWS_ACCESS_KEY_ID"
+  )]
+  aws_access_key_id: String,
+
+  /// Sets the AWS Secret Access Key
+  #[clap(
+    long,
+    value_parser,
+    name = "aws-secret-access-key",
+    env = "AWS_SECRET_ACCESS_KEY"
+  )]
+  aws_secret_access_key: String,
+
+  /// Sets the AWS Region
+  #[clap(
+    short,
+    long,
+    value_parser,
+    name = "aws-region",
+    env = "AWS_REGION",
+    default_value = "us-east-1"
+  )]
+  aws_region: String,
+
+  /// Sets the AWS Hostname (required for non-AWS S3 endpoint)
+  #[clap(short, long, value_parser, env = "AWS_HOSTNAME")]
+  hostname: Option<String>,
+
+  /// Sets the port number to server the signer
+  #[clap(short, long, value_parser, env = "PORT", default_value_t = 8000)]
+  port: u16,
+
+  /// Sets the level of verbosity
+  #[clap(short, long, parse(from_occurrences))]
+  verbose: usize,
+}
+
 #[async_std::main]
 async fn main() -> http_types::Result<()> {
-  let matches = App::new("S3 signer")
-    .version(built_info::PKG_VERSION)
-    .author("Marc-Antoine Arnaud <maarnaud@media-io.com>")
-    .about("S3 Signer for AWS and other S3 compatible storage systems.")
-    .arg(
-      Arg::with_name("aws-access-key-id")
-        .long("aws-access-key-id")
-        .value_name("AWS_ACCESS_KEY_ID")
-        .env("AWS_ACCESS_KEY_ID")
-        .required(true)
-        .help("Sets the AWS Access Key ID"),
-    )
-    .arg(
-      Arg::with_name("aws-secret-access-key")
-        .long("aws-secret-access-key")
-        .value_name("AWS_SECRET_ACCESS_KEY")
-        .env("AWS_SECRET_ACCESS_KEY")
-        .required(true)
-        .help("Sets the AWS Secret Access Key"),
-    )
-    .arg(
-      Arg::with_name("aws-region")
-        .long("aws-region")
-        .value_name("AWS_REGION")
-        .env("AWS_REGION")
-        .default_value("us-east-1")
-        .help("Sets the AWS Region"),
-    )
-    .arg(
-      Arg::with_name("aws-hostname")
-        .long("aws-hostname")
-        .value_name("AWS_HOSTNAME")
-        .env("AWS_HOSTNAME")
-        .help("Sets the AWS Hostname (required for non-AWS S3 endpoint)"),
-    )
-    .arg(
-      Arg::with_name("port")
-        .long("port")
-        .value_name("PORT")
-        .env("PORT")
-        .default_value("8000")
-        .help("Sets the port number to server the signer (default: 8000)"),
-    )
-    .arg(
-      Arg::with_name("verbose")
-        .short("v")
-        .multiple(true)
-        .help("Sets the level of verbosity"),
-    )
-    .get_matches();
+  let args = Args::parse();
 
-  let log_level = match matches.occurrences_of("verbose") {
+  let log_level = match args.verbose {
     0 => log::LevelFilter::Error,
     1 => log::LevelFilter::Warn,
     2 => log::LevelFilter::Info,
@@ -93,36 +86,23 @@ async fn main() -> http_types::Result<()> {
 
   SimpleLogger::new().with_level(log_level).init().unwrap();
 
-  let port = value_t!(matches, "port", u16).unwrap_or(8000);
-
-  let aws_hostname = matches.value_of("aws-hostname").map(|s| s.to_string());
-  let aws_region = matches
-    .value_of("aws-region")
-    .map(|s| s.to_string())
-    .unwrap();
-  let aws_region = if let Some(aws_hostname) = aws_hostname {
+  let aws_region = if let Some(aws_hostname) = args.hostname {
     Region::Custom {
-      name: aws_region,
+      name: args.aws_region,
       endpoint: aws_hostname,
     }
   } else {
-    Region::from_str(&aws_region).unwrap()
+    Region::from_str(&args.aws_region).unwrap()
   };
 
   let s3_configuration = S3Configuration {
-    s3_access_key_id: matches
-      .value_of("aws-access-key-id")
-      .map(|s| s.to_string())
-      .unwrap(),
-    s3_secret_access_key: matches
-      .value_of("aws-secret-access-key")
-      .map(|s| s.to_string())
-      .unwrap(),
+    s3_access_key_id: args.aws_access_key_id,
+    s3_secret_access_key: args.aws_secret_access_key,
     s3_region: aws_region,
   };
 
   // Open up a TCP connection and create a URL.
-  let listener = TcpListener::bind(("0.0.0.0", port)).await?;
+  let listener = TcpListener::bind(("0.0.0.0", args.port)).await?;
   let addr = format!("http://{}", listener.local_addr()?);
   log::info!("listening on {}", addr);
 
@@ -140,11 +120,18 @@ async fn main() -> http_types::Result<()> {
   Ok(())
 }
 
-#[derive(Deserialize)]
+fn default_as_false() -> bool {
+  false
+}
+
+#[derive(Debug, Deserialize)]
 struct QueryParameters {
   bucket: String,
   path: String,
+  #[serde(default = "default_as_false")]
   list: bool,
+  #[serde(default = "default_as_false")]
+  create: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -177,7 +164,13 @@ async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_t
         return Ok(response);
       }
 
-      if let Ok(QueryParameters { bucket, path, list }) = request.query() {
+      if let Ok(QueryParameters {
+        bucket,
+        path,
+        list,
+        create,
+      }) = request.query()
+      {
         let credentials = AwsCredentials::new(
           &s3_configuration.s3_access_key_id,
           &s3_configuration.s3_secret_access_key,
@@ -186,7 +179,7 @@ async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_t
         );
 
         if list {
-          let result = list_directory(&s3_configuration, &bucket, Some(path));
+          let result = list_directory(s3_configuration, &bucket, Some(path));
 
           let mut response = Response::new(StatusCode::Ok);
           response.insert_header("Content-Type", "application/json");
@@ -194,16 +187,31 @@ async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_t
           return Ok(response);
         }
 
-        let get_object = GetObjectRequest {
-          bucket,
-          key: path,
-          ..Default::default()
+        let presigned_url = if create {
+          let put_object = PutObjectRequest {
+            bucket,
+            key: path,
+            ..Default::default()
+          };
+
+          put_object.get_presigned_url(
+            &s3_configuration.s3_region,
+            &credentials,
+            &PreSignedRequestOption::default(),
+          )
+        } else {
+          let get_object = GetObjectRequest {
+            bucket,
+            key: path,
+            ..Default::default()
+          };
+
+          get_object.get_presigned_url(
+            &s3_configuration.s3_region,
+            &credentials,
+            &PreSignedRequestOption::default(),
+          )
         };
-        let presigned_url = get_object.get_presigned_url(
-          &s3_configuration.s3_region,
-          &credentials,
-          &PreSignedRequestOption::default(),
-        );
 
         let body_response = PresignedUrlResponse { url: presigned_url };
 
@@ -270,8 +278,7 @@ fn list_directory(
       .map(|contents| {
         contents
           .iter()
-          .map(|content| build_object(&content.key, &source_prefix, false))
-          .filter_map(|content| content)
+          .filter_map(|content| build_object(&content.key, &source_prefix, false))
           .collect::<Vec<_>>()
       })
       .unwrap_or_default();
@@ -281,8 +288,7 @@ fn list_directory(
       .map(|prefixes| {
         prefixes
           .iter()
-          .map(|prefix| build_object(&prefix.prefix, &source_prefix, true))
-          .filter_map(|content| content)
+          .filter_map(|prefix| build_object(&prefix.prefix, &source_prefix, true))
           .collect::<Vec<_>>()
       })
       .unwrap_or_default();
@@ -295,7 +301,10 @@ fn list_directory(
 
 fn build_object(path: &Option<String>, prefix: &Option<String>, is_dir: bool) -> Option<Object> {
   let prefix_len = prefix.as_ref().map(|s| s.len()).unwrap_or(0);
-  let path = path.clone().unwrap_or_else(|| "".to_string()).split_off(prefix_len);
+  let path = path
+    .clone()
+    .unwrap_or_else(|| "".to_string())
+    .split_off(prefix_len);
 
   if path.is_empty() {
     return None;
