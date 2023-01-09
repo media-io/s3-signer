@@ -1,5 +1,8 @@
+mod s3_configuration;
 mod sign;
+mod upload;
 
+use crate::s3_configuration::S3Configuration;
 use async_std::{
   net::{TcpListener, TcpStream},
   prelude::*,
@@ -8,18 +11,12 @@ use async_std::{
 use clap::Parser;
 use http_types::{Response, StatusCode};
 use rusoto_signature::Region;
+use serde::Serialize;
 use simple_logger::SimpleLogger;
 use std::str::FromStr;
 
 pub mod built_info {
   include!(concat!(env!("OUT_DIR"), "/built.rs"));
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct S3Configuration {
-  s3_access_key_id: String,
-  s3_secret_access_key: String,
-  s3_region: Region,
 }
 
 /// S3 Signer for AWS and other S3 compatible storage systems
@@ -119,7 +116,7 @@ async fn main() -> http_types::Result<()> {
 // Take a TCP stream, and convert it into sequential HTTP request / response pairs.
 async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_types::Result<()> {
   log::info!("starting new connection from {}", stream.peer_addr()?);
-  async_h1::accept(stream.clone(), |request| async move {
+  async_h1::accept(stream.clone(), |mut request| async move {
     log::trace!("{:?}", request);
 
     if request.url().path() == "/" {
@@ -129,10 +126,28 @@ async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_t
     }
 
     match request.url().path() {
+      "/api/upload" => upload::handle_upload_request(&mut request, s3_configuration),
       "/api/sign" => sign::handle_signature_request(&request, s3_configuration),
       _ => Ok(Response::new(StatusCode::NotFound)),
     }
   })
   .await?;
   Ok(())
+}
+
+pub(crate) fn to_ok_json_response<T>(body_response: &T) -> Response
+where
+  T: Serialize + ?Sized,
+{
+  let mut response = Response::new(StatusCode::Ok);
+  response.insert_header("Access-Control-Allow-Headers", "*");
+  response.insert_header("Access-Control-Allow-Origin", "*");
+  response.insert_header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+  );
+  response.insert_header("Content-Type", "application/json");
+  response.set_body(serde_json::to_string(body_response).unwrap().as_bytes());
+
+  response
 }

@@ -1,4 +1,4 @@
-use crate::S3Configuration;
+use crate::{to_ok_json_response, S3Configuration};
 use http_types::{Method, Request, Response, StatusCode};
 use rusoto_credential::{AwsCredentials, StaticProvider};
 use rusoto_s3::{
@@ -18,8 +18,8 @@ struct SignQueryParameters {
 }
 
 #[derive(Debug, Serialize)]
-struct PresignedUrlResponse {
-  url: String,
+pub(crate) struct PresignedUrlResponse {
+  pub(crate) url: String,
 }
 
 fn default_as_false() -> bool {
@@ -49,12 +49,7 @@ pub(crate) fn handle_signature_request(
     create,
   }) = request.query()
   {
-    let credentials = AwsCredentials::new(
-      &s3_configuration.s3_access_key_id,
-      &s3_configuration.s3_secret_access_key,
-      None,
-      None,
-    );
+    let credentials = AwsCredentials::from(s3_configuration);
 
     if list {
       let result = list_directory(s3_configuration, &bucket, Some(path));
@@ -93,16 +88,7 @@ pub(crate) fn handle_signature_request(
 
     let body_response = PresignedUrlResponse { url: presigned_url };
 
-    let mut response = Response::new(StatusCode::Ok);
-    response.insert_header("Access-Control-Allow-Headers", "*");
-    response.insert_header("Access-Control-Allow-Origin", "*");
-    response.insert_header(
-      "Access-Control-Allow-Methods",
-      "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-    );
-    response.insert_header("Content-Type", "application/json");
-    response.set_body(serde_json::to_string(&body_response).unwrap().as_bytes());
-    Ok(response)
+    Ok(to_ok_json_response(&body_response))
   } else {
     Ok(Response::new(StatusCode::UnprocessableEntity))
   }
