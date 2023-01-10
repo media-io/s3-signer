@@ -7,15 +7,18 @@ use clap::Parser;
 use rusoto_signature::Region;
 use serde::Serialize;
 use simple_logger::SimpleLogger;
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::Config;
 use warp::{
   hyper::{
     header::{
       ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
       ALLOW, CONTENT_TYPE, LOCATION,
     },
-    Body, Response, StatusCode,
+    Body, Response, StatusCode, Uri,
   },
+  path::{FullPath, Tail},
   Filter, Rejection, Reply,
 };
 
@@ -69,6 +72,31 @@ struct Args {
   verbose: usize,
 }
 
+#[derive(OpenApi)]
+#[openapi(
+  paths(
+    objects::list::route,
+    objects::get::route,
+    objects::create::route,
+    upload::create::route,
+    upload::part_upload_url::route,
+    upload::abort_or_complete::route,
+  ),
+  components(
+    schemas(
+      objects::list::Object,
+      upload::create::CreateUploadResponse,
+      upload::abort_or_complete::CompletedUploadPart,
+      upload::abort_or_complete::AbortOrCompleteUploadBody,
+     )
+  ),
+  tags(
+    (name = "Objects", description = "Objects-related API"),
+    (name = "Multipart upload", description = "Multipart upload API")
+  )
+)]
+struct ApiDoc;
+
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
   let args = Args::parse();
@@ -111,7 +139,20 @@ async fn start(s3_configuration: &S3Configuration, port: u16) {
   let api =
     warp::path("api").and(upload::routes(s3_configuration).or(objects::routes(s3_configuration)));
 
-  let routes = root.or(options()).or(api);
+  let api_doc = warp::path("api-doc.json")
+    .and(warp::get())
+    .map(|| warp::reply::json(&ApiDoc::openapi()));
+
+  let config = Arc::new(Config::from("/api-doc.json"));
+
+  let swagger_ui = warp::path("swagger-ui")
+    .and(warp::get())
+    .and(warp::path::full())
+    .and(warp::path::tail())
+    .and(warp::any().map(move || config.clone()))
+    .and_then(serve_swagger);
+
+  let routes = root.or(options()).or(api_doc).or(swagger_ui).or(api);
 
   warp::serve(routes).run(([127, 0, 0, 1], port)).await;
 }
@@ -123,6 +164,38 @@ fn options() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone 
       .body(Body::empty())
       .unwrap()
   })
+}
+
+async fn serve_swagger(
+  full_path: FullPath,
+  tail: Tail,
+  config: Arc<Config<'static>>,
+) -> Result<Box<dyn Reply + 'static>, Rejection> {
+  if full_path.as_str() == "/swagger-ui" {
+    return Ok(Box::new(warp::redirect::found(Uri::from_static(
+      "/swagger-ui/",
+    ))));
+  }
+
+  let path = tail.as_str();
+  match utoipa_swagger_ui::serve(path, config) {
+    Ok(file) => {
+      if let Some(file) = file {
+        Ok(Box::new(
+          Response::builder()
+            .header(CONTENT_TYPE, file.content_type)
+            .body(file.bytes),
+        ))
+      } else {
+        Ok(Box::new(StatusCode::NOT_FOUND))
+      }
+    }
+    Err(error) => Ok(Box::new(
+      Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .body(error.to_string()),
+    )),
+  }
 }
 
 pub(crate) fn request_builder() -> warp::http::response::Builder {

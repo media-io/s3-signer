@@ -17,6 +17,22 @@ struct PartUploadQueryParameters {
   path: String,
 }
 
+/// Pre-sign part upload URL
+#[utoipa::path(
+  put,
+  context_path = "/api/multipart-upload",
+  path = "/{upload_id}/part/{part_number}",
+  tag = "Multipart upload",
+  responses(
+    (status = 302, description = "Redirect to pre-signed URL for getting an object"),
+  ),
+  params(
+    ("upload_id" = String, Path, description = "ID of the upload"),
+    ("part_number" = i64, Path, description = "Number of the part to upload"),
+    ("bucket" = String, Query, description = "Name of the bucket"),
+    ("path" = String, Query, description = "Key of the object to get")
+  ),
+)]
 pub(crate) fn route(
   s3_configuration: &S3Configuration,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {

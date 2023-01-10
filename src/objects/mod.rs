@@ -3,18 +3,13 @@ pub(crate) mod get;
 pub(crate) mod list;
 
 use crate::S3Configuration;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
 
 #[derive(Debug, Clone, Deserialize)]
 struct SignQueryParameters {
   bucket: String,
   path: String,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct PresignedUrlResponse {
-  pub(crate) url: String,
 }
 
 pub(crate) fn routes(

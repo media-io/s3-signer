@@ -3,6 +3,7 @@ use rusoto_credential::{AwsCredentials, StaticProvider};
 use rusoto_s3::{ListObjectsV2Request, S3Client, S3};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
+use utoipa::ToSchema;
 use warp::{
   hyper::{Body, Response},
   Filter, Rejection, Reply,
@@ -14,12 +15,27 @@ struct ListObjectsQueryParameters {
   prefix: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-pub(crate) struct ListObjectsResponse {
-  #[serde(flatten)]
-  objects: Vec<Object>,
-}
+pub(crate) type ListObjectsResponse = Vec<Object>;
 
+/// List objects
+#[utoipa::path(
+  get,
+  context_path = "/api",
+  path = "/objects",
+  tag = "Objects",
+  responses(
+    (
+      status = 200,
+      description = "Successfully list objects",
+      content_type = "application/json",
+      body = ListObjectsResponse
+    ),
+  ),
+  params(
+    ("bucket" = String, Query, description = "Name of the bucket"),
+    ("prefix" = Option<String>, Query, description = "Prefix to filter objects to list")
+  ),
+)]
 pub(crate) fn route(
   s3_configuration: &S3Configuration,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
@@ -67,7 +83,7 @@ async fn handle_list_objects_signed_url(
       contents
         .iter()
         .filter_map(|content| Object::build(&content.key, &source_prefix, false))
-        .collect::<Vec<_>>()
+        .collect::<ListObjectsResponse>()
     })
     .unwrap_or_default();
 
@@ -77,19 +93,17 @@ async fn handle_list_objects_signed_url(
       prefixes
         .iter()
         .filter_map(|prefix| Object::build(&prefix.prefix, &source_prefix, true))
-        .collect::<Vec<_>>()
+        .collect::<ListObjectsResponse>()
     })
     .unwrap_or_default();
 
   objects.append(&mut folders);
 
-  let response = ListObjectsResponse { objects };
-
-  Ok(to_ok_json_response(&response))
+  Ok(to_ok_json_response(&objects))
 }
 
-#[derive(Debug, Serialize)]
-struct Object {
+#[derive(Debug, Serialize, ToSchema)]
+pub(crate) struct Object {
   path: String,
   is_dir: bool,
 }

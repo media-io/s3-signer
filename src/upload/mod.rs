@@ -1,6 +1,6 @@
-mod abort_or_complete;
-mod create;
-mod part_upload_url;
+pub(crate) mod abort_or_complete;
+pub(crate) mod create;
+pub(crate) mod part_upload_url;
 
 use crate::S3Configuration;
 use rusoto_s3::S3Client;
@@ -10,7 +10,7 @@ use warp::{hyper, Filter, Rejection, Reply};
 pub(crate) fn routes(
   s3_configuration: &S3Configuration,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
-  warp::path("multi-part-upload").and(
+  warp::path("multipart-upload").and(
     create::route(s3_configuration)
       .or(part_upload_url::route(s3_configuration))
       .or(abort_or_complete::route(s3_configuration)),

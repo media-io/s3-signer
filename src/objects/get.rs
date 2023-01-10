@@ -12,6 +12,20 @@ use warp::{
   Filter, Rejection, Reply,
 };
 
+/// Pre-sign object request URL
+#[utoipa::path(
+  post,
+  context_path = "/api",
+  path = "/object",
+  tag = "Objects",
+  responses(
+    (status = 302, description = "Redirect to pre-signed URL for getting an object"),
+  ),
+  params(
+    ("bucket" = String, Query, description = "Name of the bucket"),
+    ("path" = String, Query, description = "Key of the object to get")
+  ),
+)]
 pub(crate) fn route(
   s3_configuration: &S3Configuration,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {

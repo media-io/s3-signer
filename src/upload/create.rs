@@ -4,6 +4,7 @@ use crate::{
 use rusoto_s3::{CreateMultipartUploadRequest, S3};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
+use utoipa::ToSchema;
 use warp::{
   hyper::{Body, Response, StatusCode},
   Filter, Rejection, Reply,
@@ -15,11 +16,25 @@ struct CreateUploadQueryParameters {
   path: String,
 }
 
-#[derive(Debug, Serialize)]
-struct CreateUploadResponse {
+#[derive(Debug, Serialize, ToSchema)]
+pub(crate) struct CreateUploadResponse {
   upload_id: String,
 }
 
+/// Create multipart upload
+#[utoipa::path(
+  post,
+  context_path = "/api/multipart-upload",
+  path = "",
+  tag = "Multipart upload",
+  responses(
+    (status = 200, description = "Successfully created multipart upload", body = CreateUploadResponse),
+  ),
+  params(
+    ("bucket" = String, Query, description = "Name of the bucket"),
+    ("path" = String, Query, description = "Key of the object to upload")
+  ),
+)]
 pub(crate) fn route(
   s3_configuration: &S3Configuration,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
