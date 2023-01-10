@@ -1,11 +1,41 @@
 use crate::{s3_configuration::S3Configuration, to_ok_json_response};
 use rusoto_credential::{AwsCredentials, StaticProvider};
 use rusoto_s3::{ListObjectsV2Request, S3Client, S3};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
-use warp::hyper::{Body, Response};
+use warp::{
+  hyper::{Body, Response},
+  Filter, Rejection, Reply,
+};
 
-pub(crate) async fn handle_list_objects_signed_url(
+#[derive(Debug, Clone, Deserialize)]
+struct ListObjectsQueryParameters {
+  bucket: String,
+  prefix: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ListObjectsResponse {
+  #[serde(flatten)]
+  objects: Vec<Object>,
+}
+
+pub(crate) fn route(
+  s3_configuration: &S3Configuration,
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
+  let s3_configuration = s3_configuration.clone();
+  warp::path("objects")
+    .and(warp::get())
+    .and(warp::query::<ListObjectsQueryParameters>())
+    .map(move |parameters: ListObjectsQueryParameters| (parameters, s3_configuration.clone()))
+    .and_then(
+      |(parameters, s3_configuration): (ListObjectsQueryParameters, S3Configuration)| async move {
+        handle_list_objects_signed_url(s3_configuration, parameters.bucket, parameters.prefix).await
+      },
+    )
+}
+
+async fn handle_list_objects_signed_url(
   s3_configuration: S3Configuration,
   bucket: String,
   source_prefix: Option<String>,
@@ -53,7 +83,9 @@ pub(crate) async fn handle_list_objects_signed_url(
 
   objects.append(&mut folders);
 
-  Ok(to_ok_json_response(&objects))
+  let response = ListObjectsResponse { objects };
+
+  Ok(to_ok_json_response(&response))
 }
 
 #[derive(Debug, Serialize)]

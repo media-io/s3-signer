@@ -1,5 +1,5 @@
+mod objects;
 mod s3_configuration;
-mod sign;
 mod upload;
 
 use crate::s3_configuration::S3Configuration;
@@ -9,11 +9,14 @@ use serde::Serialize;
 use simple_logger::SimpleLogger;
 use std::str::FromStr;
 use warp::{
-  hyper::header::{
-    ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
-    CONTENT_TYPE,
+  hyper::{
+    header::{
+      ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
+      ALLOW, CONTENT_TYPE, LOCATION,
+    },
+    Body, Response, StatusCode,
   },
-  Filter,
+  Filter, Rejection, Reply,
 };
 
 pub mod built_info {
@@ -106,11 +109,20 @@ async fn start(s3_configuration: &S3Configuration, port: u16) {
     .map(|| format!("S3 Signer (version {})", built_info::PKG_VERSION));
 
   let api =
-    warp::path("api").and(upload::routes(s3_configuration).or(sign::routes(s3_configuration)));
+    warp::path("api").and(upload::routes(s3_configuration).or(objects::routes(s3_configuration)));
 
-  let routes = root.or(api);
+  let routes = root.or(options()).or(api);
 
   warp::serve(routes).run(([127, 0, 0, 1], port)).await;
+}
+
+fn options() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
+  warp::options().map(|| {
+    request_builder()
+      .header(ALLOW, "GET, OPTIONS, POST, PUT")
+      .body(Body::empty())
+      .unwrap()
+  })
 }
 
 pub(crate) fn request_builder() -> warp::http::response::Builder {
@@ -123,12 +135,21 @@ pub(crate) fn request_builder() -> warp::http::response::Builder {
     )
 }
 
-pub(crate) fn to_ok_json_response<T>(body_response: &T) -> warp::hyper::Response<warp::hyper::Body>
+pub(crate) fn to_ok_json_response<T>(body_response: &T) -> Response<Body>
 where
   T: Serialize + ?Sized,
 {
   request_builder()
     .header(CONTENT_TYPE, "application/json")
+    .status(StatusCode::OK)
     .body(serde_json::to_string(body_response).unwrap().into())
+    .unwrap() // TODO handle
+}
+
+pub(crate) fn to_redirect_response(url: &str) -> Response<Body> {
+  request_builder()
+    .header(LOCATION, url)
+    .status(StatusCode::FOUND)
+    .body(Body::empty())
     .unwrap() // TODO handle
 }

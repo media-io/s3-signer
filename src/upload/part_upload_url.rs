@@ -1,4 +1,4 @@
-use crate::{s3_configuration::S3Configuration, sign::PresignedUrlResponse, to_ok_json_response};
+use crate::{s3_configuration::S3Configuration, to_redirect_response};
 use rusoto_credential::AwsCredentials;
 use rusoto_s3::{
   util::{PreSignedRequest, PreSignedRequestOption},
@@ -15,25 +15,26 @@ use warp::{
 struct PartUploadQueryParameters {
   bucket: String,
   path: String,
-  upload_id: String,
-  part_number: i64,
 }
 
 pub(crate) fn route(
   s3_configuration: &S3Configuration,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
   let s3_configuration = s3_configuration.clone();
-  warp::get()
+  warp::path!(String / "part" / i64)
+    .and(warp::put())
     .and(warp::query::<PartUploadQueryParameters>())
-    .and_then(move |parameters: PartUploadQueryParameters| {
-      handle_part_upload_presigned_url(
-        s3_configuration.clone(),
-        parameters.bucket,
-        parameters.path,
-        parameters.upload_id,
-        parameters.part_number,
-      )
-    })
+    .and_then(
+      move |upload_id: String, part_number: i64, parameters: PartUploadQueryParameters| {
+        handle_part_upload_presigned_url(
+          s3_configuration.clone(),
+          parameters.bucket,
+          parameters.path,
+          upload_id,
+          part_number,
+        )
+      },
+    )
 }
 
 async fn handle_part_upload_presigned_url(
@@ -64,6 +65,5 @@ async fn handle_part_upload_presigned_url(
     &PreSignedRequestOption::default(),
   );
 
-  let body_response = PresignedUrlResponse { url: presigned_url };
-  Ok(to_ok_json_response(&body_response))
+  Ok(to_redirect_response(&presigned_url))
 }

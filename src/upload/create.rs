@@ -24,7 +24,8 @@ pub(crate) fn route(
   s3_configuration: &S3Configuration,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
   let s3_configuration = s3_configuration.clone();
-  warp::post()
+  warp::path::end()
+    .and(warp::post())
     .and(warp::query::<CreateUploadQueryParameters>())
     .and_then(move |parameters: CreateUploadQueryParameters| {
       handle_create_multipart_upload(s3_configuration.clone(), parameters.bucket, parameters.path)

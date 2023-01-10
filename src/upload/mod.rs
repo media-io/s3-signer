@@ -1,5 +1,4 @@
-mod abort;
-mod complete;
+mod abort_or_complete;
 mod create;
 mod part_upload_url;
 
@@ -11,11 +10,10 @@ use warp::{hyper, Filter, Rejection, Reply};
 pub(crate) fn routes(
   s3_configuration: &S3Configuration,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
-  warp::path("upload").and(
+  warp::path("multi-part-upload").and(
     create::route(s3_configuration)
       .or(part_upload_url::route(s3_configuration))
-      .or(complete::route(s3_configuration))
-      .or(abort::route(s3_configuration)),
+      .or(abort_or_complete::route(s3_configuration)),
   )
 }
 
