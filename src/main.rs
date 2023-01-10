@@ -3,17 +3,18 @@ mod sign;
 mod upload;
 
 use crate::s3_configuration::S3Configuration;
-use async_std::{
-  net::{TcpListener, TcpStream},
-  prelude::*,
-  task,
-};
 use clap::Parser;
-use http_types::{Response, StatusCode};
 use rusoto_signature::Region;
 use serde::Serialize;
 use simple_logger::SimpleLogger;
 use std::str::FromStr;
+use warp::{
+  hyper::header::{
+    ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
+    CONTENT_TYPE,
+  },
+  Filter,
+};
 
 pub mod built_info {
   include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -65,8 +66,8 @@ struct Args {
   verbose: usize,
 }
 
-#[async_std::main]
-async fn main() -> http_types::Result<()> {
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
   let args = Args::parse();
 
   let log_level = match args.verbose {
@@ -94,60 +95,40 @@ async fn main() -> http_types::Result<()> {
     s3_region: aws_region,
   };
 
-  // Open up a TCP connection and create a URL.
-  let listener = TcpListener::bind(("0.0.0.0", args.port)).await?;
-  let addr = format!("http://{}", listener.local_addr()?);
-  log::info!("listening on {}", addr);
+  start(&s3_configuration, args.port).await;
 
-  // For each incoming TCP connection, spawn a task and call `accept`.
-  let mut incoming = listener.incoming();
-  while let Some(stream) = incoming.next().await {
-    let stream = stream?;
-    let s3_configuration_cloned = s3_configuration.clone();
-    task::spawn(async move {
-      if let Err(err) = accept(stream, &s3_configuration_cloned).await {
-        log::error!("{}", err);
-      }
-    });
-  }
   Ok(())
 }
 
-// Take a TCP stream, and convert it into sequential HTTP request / response pairs.
-async fn accept(stream: TcpStream, s3_configuration: &S3Configuration) -> http_types::Result<()> {
-  log::info!("starting new connection from {}", stream.peer_addr()?);
-  async_h1::accept(stream.clone(), |mut request| async move {
-    log::trace!("{:?}", request);
+async fn start(s3_configuration: &S3Configuration, port: u16) {
+  let root = warp::path::end()
+    .and(warp::get())
+    .map(|| format!("S3 Signer (version {})", built_info::PKG_VERSION));
 
-    if request.url().path() == "/" {
-      let mut response = Response::new(StatusCode::Ok);
-      response.set_body(format!("S3 Signer (version {})", built_info::PKG_VERSION));
-      return Ok(response);
-    }
+  let api =
+    warp::path("api").and(upload::routes(s3_configuration).or(sign::routes(s3_configuration)));
 
-    match request.url().path() {
-      "/api/upload" => upload::handle_upload_request(&mut request, s3_configuration),
-      "/api/sign" => sign::handle_signature_request(&request, s3_configuration),
-      _ => Ok(Response::new(StatusCode::NotFound)),
-    }
-  })
-  .await?;
-  Ok(())
+  let routes = root.or(api);
+
+  warp::serve(routes).run(([127, 0, 0, 1], port)).await;
 }
 
-pub(crate) fn to_ok_json_response<T>(body_response: &T) -> Response
+pub(crate) fn request_builder() -> warp::http::response::Builder {
+  warp::hyper::Response::builder()
+    .header(ACCESS_CONTROL_ALLOW_HEADERS, "*")
+    .header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+    .header(
+      ACCESS_CONTROL_ALLOW_METHODS,
+      "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+    )
+}
+
+pub(crate) fn to_ok_json_response<T>(body_response: &T) -> warp::hyper::Response<warp::hyper::Body>
 where
   T: Serialize + ?Sized,
 {
-  let mut response = Response::new(StatusCode::Ok);
-  response.insert_header("Access-Control-Allow-Headers", "*");
-  response.insert_header("Access-Control-Allow-Origin", "*");
-  response.insert_header(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-  );
-  response.insert_header("Content-Type", "application/json");
-  response.set_body(serde_json::to_string(body_response).unwrap().as_bytes());
-
-  response
+  request_builder()
+    .header(CONTENT_TYPE, "application/json")
+    .body(serde_json::to_string(body_response).unwrap().into())
+    .unwrap() // TODO handle
 }
