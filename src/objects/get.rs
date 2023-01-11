@@ -15,7 +15,6 @@ use warp::{
 /// Pre-sign object request URL
 #[utoipa::path(
   post,
-  context_path = "/api",
   path = "/object",
   tag = "Objects",
   responses(
@@ -55,7 +54,7 @@ async fn handle_get_object_signed_url(
   };
 
   let presigned_url = get_object.get_presigned_url(
-    &s3_configuration.s3_region,
+    s3_configuration.region(),
     &credentials,
     &PreSignedRequestOption::default(),
   );

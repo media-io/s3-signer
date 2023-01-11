@@ -3,12 +3,17 @@ name = "s3-signer"
 version = "0.1.1"
 authors = [
   "Marc-Antoine Arnaud <marc-antoine.arnaud@luminvent.com>",
+  "Valentin NOEL <valentin.noel@luminvent.com>",
 ]
 edition = "2018"
 readme = "README.md"
 description = "A simple S3 signer in Rust"
 repository = "https://github.com/media-io/s3-signer"
 license = "MIT"
+
+[[bin]]
+name = "server"
+path = "src/bin/server.rs"
 
 [dependencies]
 async-std = { version = "1.7.0", features = ["attributes"] }

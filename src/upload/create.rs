@@ -24,7 +24,7 @@ pub(crate) struct CreateUploadResponse {
 /// Create multipart upload
 #[utoipa::path(
   post,
-  context_path = "/api/multipart-upload",
+  context_path = "/multipart-upload",
   path = "",
   tag = "Multipart upload",
   responses(

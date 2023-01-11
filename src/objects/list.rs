@@ -20,7 +20,6 @@ pub(crate) type ListObjectsResponse = Vec<Object>;
 /// List objects
 #[utoipa::path(
   get,
-  context_path = "/api",
   path = "/objects",
   tag = "Objects",
   responses(
@@ -56,12 +55,7 @@ async fn handle_list_objects_signed_url(
   bucket: String,
   source_prefix: Option<String>,
 ) -> Result<Response<Body>, Infallible> {
-  let credentials = AwsCredentials::new(
-    &s3_configuration.s3_access_key_id,
-    &s3_configuration.s3_secret_access_key,
-    None,
-    None,
-  );
+  let credentials = AwsCredentials::from(&s3_configuration);
 
   let list_objects = ListObjectsV2Request {
     bucket: bucket.to_string(),
@@ -73,7 +67,7 @@ async fn handle_list_objects_signed_url(
   let http_client = rusoto_core::request::HttpClient::new().unwrap();
   let credentials: StaticProvider = credentials.into();
 
-  let client = S3Client::new_with(http_client, credentials, s3_configuration.s3_region.clone());
+  let client = S3Client::new_with(http_client, credentials, s3_configuration.region().clone());
 
   let response = client.list_objects_v2(list_objects).await.unwrap();
 

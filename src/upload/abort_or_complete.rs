@@ -42,7 +42,7 @@ impl From<CompletedUploadPart> for CompletedPart {
 /// Abort or complete multipart upload
 #[utoipa::path(
   post,
-  context_path = "/api/multipart-upload",
+  context_path = "/multipart-upload",
   path = "/{upload_id}",
   tag = "Multipart upload",
   request_body(

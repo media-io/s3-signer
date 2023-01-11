@@ -20,7 +20,7 @@ struct PartUploadQueryParameters {
 /// Pre-sign part upload URL
 #[utoipa::path(
   put,
-  context_path = "/api/multipart-upload",
+  context_path = "/multipart-upload",
   path = "/{upload_id}/part/{part_number}",
   tag = "Multipart upload",
   responses(
@@ -76,7 +76,7 @@ async fn handle_part_upload_presigned_url(
   let credentials = AwsCredentials::from(&s3_configuration);
 
   let presigned_url = request.get_presigned_url(
-    &s3_configuration.s3_region,
+    s3_configuration.region(),
     &credentials,
     &PreSignedRequestOption::default(),
   );
