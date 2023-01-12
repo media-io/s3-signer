@@ -1,6 +1,4 @@
-use crate::{
-  objects::SignQueryParameters, s3_configuration::S3Configuration, to_redirect_response,
-};
+use crate::{objects::SignQueryParameters, to_redirect_response, S3Configuration};
 use rusoto_credential::AwsCredentials;
 use rusoto_s3::{
   util::{PreSignedRequest, PreSignedRequestOption},
@@ -32,9 +30,9 @@ pub(crate) fn route(
   warp::path("objects")
     .and(warp::post())
     .and(warp::query::<SignQueryParameters>())
-    .map(move |parameters: SignQueryParameters| (parameters, s3_configuration.clone()))
+    .and(warp::any().map(move || s3_configuration.clone()))
     .and_then(
-      |(parameters, s3_configuration): (SignQueryParameters, S3Configuration)| async move {
+      |parameters: SignQueryParameters, s3_configuration: S3Configuration| async move {
         handle_create_object_signed_url(s3_configuration, parameters.bucket, parameters.path).await
       },
     )
@@ -45,6 +43,7 @@ async fn handle_create_object_signed_url(
   bucket: String,
   key: String,
 ) -> Result<Response<Body>, Infallible> {
+  log::info!("Create object signed URL: bucket={}, key={}", bucket, key);
   let credentials = AwsCredentials::from(&s3_configuration);
 
   let put_object = PutObjectRequest {

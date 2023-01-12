@@ -1,12 +1,10 @@
-use crate::{
-  s3_configuration::S3Configuration, to_ok_json_response, upload::execute_s3_request_operation,
-};
+use crate::{to_ok_json_response, upload::S3Client, Error, S3Configuration};
 use rusoto_s3::{CreateMultipartUploadRequest, S3};
 use serde::{Deserialize, Serialize};
-use std::convert::Infallible;
+use std::convert::TryFrom;
 use utoipa::ToSchema;
 use warp::{
-  hyper::{Body, Response, StatusCode},
+  hyper::{Body, Response},
   Filter, Rejection, Reply,
 };
 
@@ -42,40 +40,46 @@ pub(crate) fn route(
   warp::path::end()
     .and(warp::post())
     .and(warp::query::<CreateUploadQueryParameters>())
-    .and_then(move |parameters: CreateUploadQueryParameters| {
-      handle_create_multipart_upload(s3_configuration.clone(), parameters.bucket, parameters.path)
-    })
+    .and(warp::any().map(move || s3_configuration.clone()))
+    .and_then(
+      |parameters: CreateUploadQueryParameters, s3_configuration: S3Configuration| async move {
+        handle_create_multipart_upload(&s3_configuration, parameters.bucket, parameters.path).await
+      },
+    )
 }
 
 async fn handle_create_multipart_upload(
-  s3_configuration: S3Configuration,
+  s3_configuration: &S3Configuration,
   bucket: String,
   key: String,
-) -> Result<Response<Body>, Infallible> {
+) -> Result<Response<Body>, Rejection> {
   log::info!("Create multipart upload...");
-  execute_s3_request_operation(&s3_configuration, |client| async move {
-    let request = CreateMultipartUploadRequest {
-      bucket,
-      key,
-      ..Default::default()
-    };
+  let client = S3Client::try_from(s3_configuration)?;
+  client
+    .execute(|client: rusoto_s3::S3Client| async move {
+      let request = CreateMultipartUploadRequest {
+        bucket,
+        key,
+        ..Default::default()
+      };
 
-    let result = client.create_multipart_upload(request).await;
-    if let Ok(output) = &result {
-      if let Some(upload_id) = &output.upload_id {
-        let body_response = CreateUploadResponse {
-          upload_id: upload_id.clone(),
-        };
-        return Ok(to_ok_json_response(&body_response));
-      }
-      log::error!("Invalid create_multipart_upload response: {:?}", output);
-    }
-
-    log::error!(
-      "Failure on create_multipart_upload: {}",
-      result.unwrap_err()
-    );
-    Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response())
-  })
-  .await
+      client
+        .create_multipart_upload(request)
+        .await
+        .map_err(|error| warp::reject::custom(Error::MultipartUploadCreationError(error)))
+        .and_then(|output| {
+          output
+            .upload_id
+            .map(|upload_id| {
+              let body_response = CreateUploadResponse { upload_id };
+              to_ok_json_response(&body_response)
+            })
+            .ok_or_else(|| {
+              warp::reject::custom(Error::MultipartUploadError(
+                "Invalid multipart upload creation response".to_string(),
+              ))
+            })
+        })
+    })
+    .await
 }

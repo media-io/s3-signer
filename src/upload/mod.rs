@@ -2,9 +2,8 @@ pub(crate) mod abort_or_complete;
 pub(crate) mod create;
 pub(crate) mod part_upload_url;
 
-use crate::S3Configuration;
-use rusoto_s3::S3Client;
-use std::convert::{Infallible, TryFrom};
+use crate::{Error, S3Configuration};
+use std::convert::TryFrom;
 use warp::{hyper, Filter, Rejection, Reply};
 
 pub(crate) fn routes(
@@ -17,21 +16,29 @@ pub(crate) fn routes(
   )
 }
 
-async fn execute_s3_request_operation<F, Fut>(
-  s3_configuration: &S3Configuration,
-  operation: F,
-) -> Result<hyper::Response<hyper::Body>, Infallible>
-where
-  F: FnOnce(S3Client) -> Fut,
-  Fut: std::future::Future<Output = Result<hyper::Response<hyper::Body>, Infallible>>,
-{
-  let result = S3Client::try_from(s3_configuration);
-  if let Err(error) = result {
-    log::error!("Cannot create S3 client: {}", error);
-    return Ok(hyper::StatusCode::INTERNAL_SERVER_ERROR.into_response());
+struct S3Client {
+  client: rusoto_s3::S3Client,
+}
+
+impl TryFrom<&S3Configuration> for S3Client {
+  type Error = Rejection;
+
+  fn try_from(s3_configuration: &S3Configuration) -> Result<Self, Self::Error> {
+    let client = rusoto_s3::S3Client::try_from(s3_configuration)
+      .map_err(|error| warp::reject::custom(Error::S3ConnectionError(error)))?;
+    Ok(Self { client })
   }
+}
 
-  let client = result.unwrap();
-
-  operation(client).await
+impl S3Client {
+  pub async fn execute<F, Fut>(
+    self,
+    operation: F,
+  ) -> Result<hyper::Response<hyper::Body>, Rejection>
+  where
+    F: FnOnce(rusoto_s3::S3Client) -> Fut,
+    Fut: std::future::Future<Output = Result<hyper::Response<hyper::Body>, Rejection>>,
+  {
+    operation(self.client).await
+  }
 }

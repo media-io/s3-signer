@@ -1,8 +1,7 @@
-use crate::{s3_configuration::S3Configuration, to_ok_json_response};
+use crate::{to_ok_json_response, Error, S3Configuration};
 use rusoto_credential::{AwsCredentials, StaticProvider};
 use rusoto_s3::{ListObjectsV2Request, S3Client, S3};
 use serde::{Deserialize, Serialize};
-use std::convert::Infallible;
 use utoipa::ToSchema;
 use warp::{
   hyper::{Body, Response},
@@ -42,19 +41,24 @@ pub(crate) fn route(
   warp::path("objects")
     .and(warp::get())
     .and(warp::query::<ListObjectsQueryParameters>())
-    .map(move |parameters: ListObjectsQueryParameters| (parameters, s3_configuration.clone()))
+    .and(warp::any().map(move || s3_configuration.clone()))
     .and_then(
-      |(parameters, s3_configuration): (ListObjectsQueryParameters, S3Configuration)| async move {
-        handle_list_objects_signed_url(s3_configuration, parameters.bucket, parameters.prefix).await
+      |parameters: ListObjectsQueryParameters, s3_configuration: S3Configuration| async move {
+        handle_list_objects(s3_configuration, parameters.bucket, parameters.prefix).await
       },
     )
 }
 
-async fn handle_list_objects_signed_url(
+async fn handle_list_objects(
   s3_configuration: S3Configuration,
   bucket: String,
   source_prefix: Option<String>,
-) -> Result<Response<Body>, Infallible> {
+) -> Result<Response<Body>, Rejection> {
+  log::info!(
+    "List objects signed URL: bucket={}, source_prefix={:?}",
+    bucket,
+    source_prefix
+  );
   let credentials = AwsCredentials::from(&s3_configuration);
 
   let list_objects = ListObjectsV2Request {
@@ -64,12 +68,16 @@ async fn handle_list_objects_signed_url(
     ..Default::default()
   };
 
-  let http_client = rusoto_core::request::HttpClient::new().unwrap();
+  let http_client = rusoto_core::request::HttpClient::new()
+    .map_err(|error| warp::reject::custom(Error::S3ConnectionError(error)))?;
   let credentials: StaticProvider = credentials.into();
 
   let client = S3Client::new_with(http_client, credentials, s3_configuration.region().clone());
 
-  let response = client.list_objects_v2(list_objects).await.unwrap();
+  let response = client
+    .list_objects_v2(list_objects)
+    .await
+    .map_err(|error| warp::reject::custom(Error::ListObjectsError(error)))?;
 
   let mut objects = response
     .contents

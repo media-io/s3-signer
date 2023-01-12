@@ -1,4 +1,4 @@
-use crate::{s3_configuration::S3Configuration, to_redirect_response};
+use crate::{to_redirect_response, S3Configuration};
 use rusoto_credential::AwsCredentials;
 use rusoto_s3::{
   util::{PreSignedRequest, PreSignedRequestOption},
@@ -28,7 +28,7 @@ struct PartUploadQueryParameters {
   ),
   params(
     ("upload_id" = String, Path, description = "ID of the upload"),
-    ("part_number" = i64, Path, description = "Number of the part to upload"),
+    ("part_number" = i64, Path, description = "Index number of the part to upload"),
     ("bucket" = String, Query, description = "Name of the bucket"),
     ("path" = String, Query, description = "Key of the object to get")
   ),
@@ -40,21 +40,26 @@ pub(crate) fn route(
   warp::path!(String / "part" / i64)
     .and(warp::put())
     .and(warp::query::<PartUploadQueryParameters>())
+    .and(warp::any().map(move || s3_configuration.clone()))
     .and_then(
-      move |upload_id: String, part_number: i64, parameters: PartUploadQueryParameters| {
+      |upload_id: String,
+       part_number: i64,
+       parameters: PartUploadQueryParameters,
+       s3_configuration: S3Configuration| async move {
         handle_part_upload_presigned_url(
-          s3_configuration.clone(),
+          &s3_configuration,
           parameters.bucket,
           parameters.path,
           upload_id,
           part_number,
         )
+        .await
       },
     )
 }
 
 async fn handle_part_upload_presigned_url(
-  s3_configuration: S3Configuration,
+  s3_configuration: &S3Configuration,
   bucket: String,
   key: String,
   upload_id: String,
@@ -73,7 +78,7 @@ async fn handle_part_upload_presigned_url(
     ..Default::default()
   };
 
-  let credentials = AwsCredentials::from(&s3_configuration);
+  let credentials = AwsCredentials::from(s3_configuration);
 
   let presigned_url = request.get_presigned_url(
     s3_configuration.region(),

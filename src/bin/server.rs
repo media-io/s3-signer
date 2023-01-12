@@ -1,9 +1,10 @@
 use clap::Parser;
 use s3_signer::S3Configuration;
 use simple_logger::SimpleLogger;
+use std::convert::Infallible;
 use utoipa::OpenApi;
 use warp::{
-  hyper::{header::ALLOW, Body},
+  hyper::{header::ALLOW, Body, StatusCode},
   Filter, Rejection, Reply,
 };
 
@@ -98,7 +99,8 @@ async fn start(s3_configuration: &S3Configuration, port: u16) {
   let routes = root()
     .or(options())
     .or(warp::path(API_ROOT_PATH).and(s3_signer::routes(s3_configuration)))
-    .or(doc());
+    .or(doc())
+    .recover(handle_rejection);
 
   warp::serve(routes).run(([127, 0, 0, 1], port)).await;
 }
@@ -144,4 +146,17 @@ fn doc() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
   let swagger = s3_signer::swagger_route("swagger-ui", "api-doc.json");
 
   api_doc.or(swagger)
+}
+
+async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
+  if err.is_not_found() {
+    return Ok(StatusCode::NOT_FOUND.into_response());
+  }
+
+  if let Some(error) = err.find::<s3_signer::Error>() {
+    log::error!("{}", error);
+  } else {
+    log::error!("Unhandled rejetion: {:?}", err);
+  }
+  Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }

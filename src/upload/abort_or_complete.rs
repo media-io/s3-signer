@@ -1,10 +1,10 @@
-use crate::{s3_configuration::S3Configuration, upload::execute_s3_request_operation};
+use crate::{upload::S3Client, Error, S3Configuration};
 use rusoto_s3::{
   AbortMultipartUploadRequest, CompleteMultipartUploadRequest, CompletedMultipartUpload,
   CompletedPart, S3,
 };
 use serde::Deserialize;
-use std::convert::Infallible;
+use std::convert::TryFrom;
 use utoipa::ToSchema;
 use warp::{
   hyper::{Body, Response, StatusCode},
@@ -90,17 +90,11 @@ pub(crate) fn route(
       )| async move {
         match body {
           AbortOrCompleteUploadBody::Abort => {
-            handle_abort_multipart_upload(s3_configuration.clone(), bucket, path, upload_id).await
+            handle_abort_multipart_upload(&s3_configuration, bucket, path, upload_id).await
           }
           AbortOrCompleteUploadBody::Complete { parts } => {
-            handle_complete_multipart_upload(
-              s3_configuration.clone(),
-              bucket,
-              path,
-              upload_id,
-              parts,
-            )
-            .await
+            handle_complete_multipart_upload(&s3_configuration, bucket, path, upload_id, parts)
+              .await
           }
         }
       },
@@ -108,56 +102,58 @@ pub(crate) fn route(
 }
 
 async fn handle_abort_multipart_upload(
-  s3_configuration: S3Configuration,
+  s3_configuration: &S3Configuration,
   bucket: String,
   key: String,
   upload_id: String,
-) -> Result<Response<Body>, Infallible> {
+) -> Result<Response<Body>, Rejection> {
   log::info!("Abort multipart upload: upload_id={}", upload_id);
-  execute_s3_request_operation(&s3_configuration, |client| async move {
-    let request = AbortMultipartUploadRequest {
-      bucket,
-      key,
-      upload_id,
-      ..Default::default()
-    };
+  let client = S3Client::try_from(s3_configuration)?;
+  client
+    .execute(|client: rusoto_s3::S3Client| async move {
+      let request = AbortMultipartUploadRequest {
+        bucket,
+        key,
+        upload_id,
+        ..Default::default()
+      };
 
-    if let Err(error) = client.abort_multipart_upload(request).await {
-      log::error!("Failure on abort_multipart_upload: {}", error);
-      Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response())
-    } else {
-      Ok(StatusCode::OK.into_response())
-    }
-  })
-  .await
+      client
+        .abort_multipart_upload(request)
+        .await
+        .map(|_output| StatusCode::OK.into_response())
+        .map_err(|error| warp::reject::custom(Error::MultipartUploadAbortionError(error)))
+    })
+    .await
 }
 
 async fn handle_complete_multipart_upload(
-  s3_configuration: S3Configuration,
+  s3_configuration: &S3Configuration,
   bucket: String,
   key: String,
   upload_id: String,
   body: Vec<CompletedUploadPart>,
-) -> Result<Response<Body>, Infallible> {
+) -> Result<Response<Body>, Rejection> {
   log::info!("Complete multipart upload: upload_id={}", upload_id);
-  execute_s3_request_operation(&s3_configuration, |client| async move {
-    let parts = body.into_iter().map(CompletedPart::from).collect();
-    let parts = CompletedMultipartUpload { parts: Some(parts) };
+  let client = S3Client::try_from(s3_configuration)?;
+  client
+    .execute(|client: rusoto_s3::S3Client| async move {
+      let parts = body.into_iter().map(CompletedPart::from).collect();
+      let parts = CompletedMultipartUpload { parts: Some(parts) };
 
-    let request = CompleteMultipartUploadRequest {
-      bucket,
-      key,
-      upload_id,
-      multipart_upload: Some(parts),
-      ..Default::default()
-    };
+      let request = CompleteMultipartUploadRequest {
+        bucket,
+        key,
+        upload_id,
+        multipart_upload: Some(parts),
+        ..Default::default()
+      };
 
-    if let Err(error) = client.complete_multipart_upload(request).await {
-      log::error!("Failure on complete_multipart_upload: {}", error);
-      Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response())
-    } else {
-      Ok(StatusCode::OK.into_response())
-    }
-  })
-  .await
+      client
+        .complete_multipart_upload(request)
+        .await
+        .map(|_output| StatusCode::OK.into_response())
+        .map_err(|error| warp::reject::custom(Error::MultipartUploadCompletionError(error)))
+    })
+    .await
 }

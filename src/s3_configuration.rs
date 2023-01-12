@@ -6,9 +6,9 @@ use std::{convert::TryFrom, str::FromStr};
 
 #[derive(Clone, Debug)]
 pub struct S3Configuration {
-  s3_access_key_id: String,
-  s3_secret_access_key: String,
-  s3_region: Region,
+  access_key_id: String,
+  secret_access_key: String,
+  region: Region,
 }
 
 impl S3Configuration {
@@ -18,9 +18,9 @@ impl S3Configuration {
     region: &str,
   ) -> Result<Self, ParseRegionError> {
     Region::from_str(region).map(|region| Self {
-      s3_access_key_id: access_key_id.to_string(),
-      s3_secret_access_key: secret_access_key.to_string(),
-      s3_region: region,
+      access_key_id: access_key_id.to_string(),
+      secret_access_key: secret_access_key.to_string(),
+      region,
     })
   }
 
@@ -36,30 +36,30 @@ impl S3Configuration {
     };
 
     Self {
-      s3_access_key_id: access_key_id.to_string(),
-      s3_secret_access_key: secret_access_key.to_string(),
-      s3_region: region,
+      access_key_id: access_key_id.to_string(),
+      secret_access_key: secret_access_key.to_string(),
+      region,
     }
   }
 
   pub fn access_key_id(&self) -> &String {
-    &self.s3_access_key_id
+    &self.access_key_id
   }
 
   pub fn secret_access_key(&self) -> &String {
-    &self.s3_secret_access_key
+    &self.secret_access_key
   }
 
   pub fn region(&self) -> &Region {
-    &self.s3_region
+    &self.region
   }
 }
 
 impl From<&S3Configuration> for AwsCredentials {
   fn from(s3_configuration: &S3Configuration) -> Self {
     Self::new(
-      &s3_configuration.s3_access_key_id,
-      &s3_configuration.s3_secret_access_key,
+      &s3_configuration.access_key_id,
+      &s3_configuration.secret_access_key,
       None,
       None,
     )
@@ -74,10 +74,10 @@ impl TryFrom<&S3Configuration> for S3Client {
     let client = S3Client::new_with(
       http_client,
       StaticProvider::new_minimal(
-        s3_configuration.s3_access_key_id.clone(),
-        s3_configuration.s3_secret_access_key.clone(),
+        s3_configuration.access_key_id.clone(),
+        s3_configuration.secret_access_key.clone(),
       ),
-      s3_configuration.s3_region.clone(),
+      s3_configuration.region.clone(),
     );
 
     Ok(client)

@@ -100,8 +100,8 @@ fn merge_paths(mut base: Paths, other: Paths, prefix_path: &str) -> Paths {
 }
 
 fn merge_components(a: Option<Components>, b: Option<Components>) -> Option<Components> {
-  if let Some(mut b_components) = b {
-    if let Some(mut a_components) = a {
+  match (a, b) {
+    (Some(mut a_components), Some(mut b_components)) => {
       for (k, v) in b_components.responses {
         a_components.responses.insert(k, v);
       }
@@ -110,24 +110,22 @@ fn merge_components(a: Option<Components>, b: Option<Components>) -> Option<Comp
         .security_schemes
         .append(&mut b_components.security_schemes);
       Some(a_components)
-    } else {
-      Some(b_components)
     }
-  } else {
-    a
+    (Some(a_components), None) => Some(a_components),
+    (None, Some(b_components)) => Some(b_components),
+    (None, None) => None,
   }
 }
 
 fn merge<T>(a: Option<Vec<T>>, b: Option<Vec<T>>) -> Option<Vec<T>> {
-  if let Some(mut b_values) = b {
-    if let Some(mut a_values) = a {
+  match (a, b) {
+    (Some(mut a_values), Some(mut b_values)) => {
       a_values.append(&mut b_values);
       Some(a_values)
-    } else {
-      Some(b_values)
     }
-  } else {
-    a
+    (Some(a_values), None) => Some(a_values),
+    (None, Some(b_values)) => Some(b_values),
+    (None, None) => None,
   }
 }
 

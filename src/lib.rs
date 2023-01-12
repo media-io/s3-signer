@@ -1,9 +1,10 @@
+mod error;
 mod objects;
 mod open_api;
 mod s3_configuration;
 mod upload;
 
-pub use crate::{open_api::*, s3_configuration::S3Configuration};
+pub use crate::{error::Error, open_api::*, s3_configuration::S3Configuration};
 
 use serde::Serialize;
 use warp::{
