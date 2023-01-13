@@ -11,21 +11,40 @@ description = "A simple S3 signer in Rust"
 repository = "https://github.com/media-io/s3-signer"
 license = "MIT"
 
+[features]
+server = [
+  "async-std",
+  "clap",
+  "log",
+  "rusoto_core",
+  "rusoto_credential",
+  "rusoto_signature",
+  "serde_json",
+  "simple_logger",
+  "tokio",
+  "utoipa-swagger-ui",
+  "warp",
+]
+
+[[bin]]
+name = "server"
+required-features = ["server"]
+
 [dependencies]
-async-std = { version = "1.7.0", features = ["attributes"] }
-clap = { version = "3.2.22", features = ["derive", "env"] }
-log = "0.4"
-rusoto_core = "0.48.0"
-rusoto_credential = "0.48.0"
-rusoto_signature = "0.48.0"
+async-std = { version = "1.7.0", features = ["attributes"], optional = true }
+clap = { version = "3.2.22", features = ["derive", "env"], optional = true }
+log = { version = "0.4", optional = true }
+rusoto_core = { version = "0.48.0", optional = true }
+rusoto_credential = { version = "0.48.0", optional = true }
+rusoto_signature = { version = "0.48.0", optional = true }
 rusoto_s3 = "0.48.0"
 serde = { version = "^1.0", features = ["derive"] }
-serde_json = "^1.0"
-simple_logger = "2.3.0"
-tokio = "1.5.0"
+serde_json = { version = "^1.0", optional = true }
+simple_logger = { version = "2.3.0", optional = true }
+tokio = { version = "1.5.0", optional = true }
 utoipa = "2"
-utoipa-swagger-ui = "2"
-warp = "0.3.3"
+utoipa-swagger-ui = { version = "2", optional = true }
+warp = { version = "0.3.3", optional = true }
 
 [build-dependencies]
 built = "0.5"

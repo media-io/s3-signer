@@ -14,12 +14,12 @@ use warp::{
 #[derive(OpenApi)]
 #[openapi(
   paths(
-    crate::objects::list::route,
+    crate::objects::list::server::route,
     crate::objects::get::route,
     crate::objects::create::route,
-    crate::upload::create::route,
-    crate::upload::part_upload_url::route,
-    crate::upload::abort_or_complete::route,
+    crate::upload::create::server::route,
+    crate::upload::part_upload_url::server::route,
+    crate::upload::abort_or_complete::server::route,
   ),
   components(
     schemas(
