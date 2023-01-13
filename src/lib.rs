@@ -38,10 +38,13 @@ pub(crate) fn to_ok_json_response<T>(body_response: &T) -> Result<Response<Body>
 where
   T: Serialize + ?Sized,
 {
+  let json = serde_json::to_string(body_response)
+    .map_err(|error| warp::reject::custom(Error::JsonError(error)))?;
+
   request_builder()
     .header(CONTENT_TYPE, "application/json")
     .status(StatusCode::OK)
-    .body(serde_json::to_string(body_response).unwrap().into())
+    .body(json.into())
     .map_err(|error| warp::reject::custom(Error::HttpError(error)))
 }
 

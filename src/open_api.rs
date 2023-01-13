@@ -1,3 +1,4 @@
+use crate::Error;
 use std::{collections::BTreeMap, str::FromStr, sync::Arc};
 use utoipa::{
   openapi::{Components, OpenApiBuilder, PathItem, Paths},
@@ -137,9 +138,8 @@ async fn serve_swagger(
 ) -> Result<Box<dyn Reply + 'static>, Rejection> {
   let path = format!("/{}/", path);
   if full_path.as_str() == path.trim_end_matches('/') {
-    return Ok(Box::new(warp::redirect::found(
-      Uri::from_str(&path).unwrap(),
-    )));
+    let uri = Uri::from_str(&path).map_err(|error| warp::reject::custom(Error::UriError(error)))?;
+    return Ok(Box::new(warp::redirect::found(uri)));
   }
 
   let path = tail.as_str();
