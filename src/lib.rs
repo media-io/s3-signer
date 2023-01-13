@@ -34,21 +34,24 @@ pub fn request_builder() -> warp::http::response::Builder {
     )
 }
 
-pub(crate) fn to_ok_json_response<T>(body_response: &T) -> Response<Body>
+pub(crate) fn to_ok_json_response<T>(body_response: &T) -> Result<Response<Body>, Rejection>
 where
   T: Serialize + ?Sized,
 {
+  let json = serde_json::to_string(body_response)
+    .map_err(|error| warp::reject::custom(Error::JsonError(error)))?;
+
   request_builder()
     .header(CONTENT_TYPE, "application/json")
     .status(StatusCode::OK)
-    .body(serde_json::to_string(body_response).unwrap().into())
-    .unwrap() // TODO handle
+    .body(json.into())
+    .map_err(|error| warp::reject::custom(Error::HttpError(error)))
 }
 
-pub(crate) fn to_redirect_response(url: &str) -> Response<Body> {
+pub(crate) fn to_redirect_response(url: &str) -> Result<Response<Body>, Rejection> {
   request_builder()
     .header(LOCATION, url)
     .status(StatusCode::FOUND)
     .body(Body::empty())
-    .unwrap() // TODO handle
+    .map_err(|error| warp::reject::custom(Error::HttpError(error)))
 }

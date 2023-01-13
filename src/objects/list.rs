@@ -101,7 +101,7 @@ async fn handle_list_objects(
 
   objects.append(&mut folders);
 
-  Ok(to_ok_json_response(&objects))
+  to_ok_json_response(&objects)
 }
 
 #[derive(Debug, Serialize, ToSchema)]
