@@ -7,6 +7,7 @@ use std::fmt::{Debug, Display, Formatter};
 use warp::reject::Reject;
 
 pub enum Error {
+  HttpError(warp::http::Error),
   ListObjectsError(RusotoError<ListObjectsV2Error>),
   MultipartUploadError(String),
   MultipartUploadAbortionError(RusotoError<AbortMultipartUploadError>),
@@ -19,6 +20,9 @@ pub enum Error {
 impl Debug for Error {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
+      Error::HttpError(error) => {
+        write!(f, "HTTP: {:?}", error)
+      }
       Error::ListObjectsError(error) => {
         write!(f, "Objects listing: {:?}", error)
       }

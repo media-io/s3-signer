@@ -70,14 +70,14 @@ async fn handle_create_multipart_upload(
         .and_then(|output| {
           output
             .upload_id
-            .map(|upload_id| {
-              let body_response = CreateUploadResponse { upload_id };
-              to_ok_json_response(&body_response)
-            })
             .ok_or_else(|| {
               warp::reject::custom(Error::MultipartUploadError(
                 "Invalid multipart upload creation response".to_string(),
               ))
+            })
+            .and_then(|upload_id| {
+              let body_response = CreateUploadResponse { upload_id };
+              to_ok_json_response(&body_response)
             })
         })
     })

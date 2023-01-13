@@ -4,7 +4,6 @@ use rusoto_s3::{
   util::{PreSignedRequest, PreSignedRequestOption},
   PutObjectRequest,
 };
-use std::convert::Infallible;
 use warp::{
   hyper::{Body, Response},
   Filter, Rejection, Reply,
@@ -42,7 +41,7 @@ async fn handle_create_object_signed_url(
   s3_configuration: S3Configuration,
   bucket: String,
   key: String,
-) -> Result<Response<Body>, Infallible> {
+) -> Result<Response<Body>, Rejection> {
   log::info!("Create object signed URL: bucket={}, key={}", bucket, key);
   let credentials = AwsCredentials::from(&s3_configuration);
 
@@ -58,5 +57,5 @@ async fn handle_create_object_signed_url(
     &PreSignedRequestOption::default(),
   );
 
-  Ok(to_redirect_response(&presigned_url))
+  to_redirect_response(&presigned_url)
 }

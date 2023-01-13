@@ -5,7 +5,6 @@ use rusoto_s3::{
   UploadPartRequest,
 };
 use serde::Deserialize;
-use std::convert::Infallible;
 use warp::{
   hyper::{Body, Response},
   Filter, Rejection, Reply,
@@ -64,7 +63,7 @@ async fn handle_part_upload_presigned_url(
   key: String,
   upload_id: String,
   part_number: i64,
-) -> Result<Response<Body>, Infallible> {
+) -> Result<Response<Body>, Rejection> {
   log::info!(
     "Upload part: upload_id={}, part_number={}",
     upload_id,
@@ -86,5 +85,5 @@ async fn handle_part_upload_presigned_url(
     &PreSignedRequestOption::default(),
   );
 
-  Ok(to_redirect_response(&presigned_url))
+  to_redirect_response(&presigned_url)
 }
