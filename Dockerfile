@@ -6,7 +6,7 @@ WORKDIR /src
 RUN apt-get update && \
     apt-get install -y libssl-dev && \
     cargo build --verbose --release && \
-    cargo install --path .
+    cargo install --features server --path .
 
 FROM debian:buster
 COPY --from=builder /usr/local/cargo/bin/s3-signer /usr/bin
