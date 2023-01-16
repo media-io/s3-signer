@@ -27,7 +27,7 @@ server = [
 ]
 
 [[bin]]
-name = "server"
+name = "s3-signer"
 required-features = ["server"]
 
 [dependencies]
