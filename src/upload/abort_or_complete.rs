@@ -20,6 +20,7 @@ pub struct CompletedUploadPart {
   pub etag: String,
 }
 
+#[cfg(feature = "server")]
 impl From<CompletedUploadPart> for rusoto_s3::CompletedPart {
   fn from(part: CompletedUploadPart) -> Self {
     Self {
