@@ -1,6 +1,6 @@
 [package]
 name = "s3-signer"
-version = "0.2.1"
+version = "0.2.2"
 authors = [
   "Marc-Antoine Arnaud <marc-antoine.arnaud@luminvent.com>",
   "Valentin NOEL <valentin.noel@luminvent.com>",
