@@ -36,7 +36,6 @@ struct Args {
 
   /// Sets the AWS Region
   #[clap(
-    short,
     long,
     value_parser,
     name = "aws-region",
@@ -47,7 +46,7 @@ struct Args {
 
   /// Sets the AWS Hostname (required for non-AWS S3 endpoint)
   #[clap(short, long, value_parser, env = "AWS_HOSTNAME")]
-  hostname: Option<String>,
+  aws_hostname: Option<String>,
 
   /// Sets the port number to server the signer
   #[clap(short, long, value_parser, env = "PORT", default_value_t = 8000)]
@@ -72,7 +71,7 @@ async fn main() -> std::io::Result<()> {
 
   SimpleLogger::new().with_level(log_level).init().unwrap();
 
-  let s3_configuration = if let Some(aws_hostname) = args.hostname {
+  let s3_configuration = if let Some(aws_hostname) = args.aws_hostname {
     S3Configuration::new_with_hostname(
       &args.aws_access_key_id,
       &args.aws_secret_access_key,
@@ -102,7 +101,7 @@ async fn start(s3_configuration: &S3Configuration, port: u16) {
     .or(doc())
     .recover(handle_rejection);
 
-  warp::serve(routes).run(([127, 0, 0, 1], port)).await;
+  warp::serve(routes).run(([0, 0, 0, 0], port)).await;
 }
 
 #[derive(OpenApi)]
@@ -122,9 +121,12 @@ struct ApiDoc;
   responses((status = 200, description = "Server info"))
 )]
 fn root() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
-  warp::path::end()
-    .and(warp::get())
-    .map(|| format!("S3 Signer (version {})", built_info::PKG_VERSION))
+  warp::path::end().and(warp::get()).map(|| {
+    format!(
+      "S3 Signer (version {})\nAPI documentation on: /swagger-ui/",
+      built_info::PKG_VERSION
+    )
+  })
 }
 
 fn options() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
