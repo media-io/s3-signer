@@ -17,16 +17,16 @@ use warp::{
     crate::objects::list::server::route,
     crate::objects::get::route,
     crate::objects::create::route,
-    crate::upload::create::server::route,
-    crate::upload::part_upload_url::server::route,
-    crate::upload::abort_or_complete::server::route,
+    crate::multipart_upload::create::server::route,
+    crate::multipart_upload::part_upload_url::server::route,
+    crate::multipart_upload::abort_or_complete::server::route,
   ),
   components(
     schemas(
       crate::objects::list::Object,
-      crate::upload::create::CreateUploadResponse,
-      crate::upload::abort_or_complete::CompletedUploadPart,
-      crate::upload::abort_or_complete::AbortOrCompleteUploadBody,
+      crate::multipart_upload::create::CreateUploadResponse,
+      crate::multipart_upload::abort_or_complete::CompletedUploadPart,
+      crate::multipart_upload::abort_or_complete::AbortOrCompleteUploadBody,
      )
   ),
   tags(

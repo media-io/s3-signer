@@ -11,7 +11,7 @@ use warp::{
 
 /// Pre-sign object request URL
 #[utoipa::path(
-  post,
+  get,
   path = "/object",
   tag = "Objects",
   responses(
@@ -26,6 +26,7 @@ pub(crate) fn route(
   s3_configuration: &S3Configuration,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
   let s3_configuration = s3_configuration.clone();
+
   warp::path("object")
     .and(warp::get())
     .and(warp::query::<SignQueryParameters>())

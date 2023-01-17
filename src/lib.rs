@@ -5,7 +5,7 @@ pub mod objects;
 mod open_api;
 #[cfg(feature = "server")]
 mod s3_configuration;
-pub mod upload;
+pub mod multipart_upload;
 
 #[cfg(feature = "server")]
 pub use server::*;
@@ -29,7 +29,7 @@ mod server {
   pub fn routes(
     s3_configuration: &S3Configuration,
   ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
-    crate::upload::routes(s3_configuration).or(crate::objects::routes(s3_configuration))
+    crate::multipart_upload::routes(s3_configuration).or(crate::objects::routes(s3_configuration))
   }
 
   pub fn request_builder() -> warp::http::response::Builder {

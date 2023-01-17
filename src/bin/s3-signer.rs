@@ -116,9 +116,9 @@ struct ApiDoc;
 /// Root path
 #[utoipa::path(
   get,
-  path = "",
+  path = "/",
   tag = "Server",
-  responses((status = 200, description = "Server info"))
+  responses((status = 200, description = "Server information"))
 )]
 fn root() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
   warp::path::end().and(warp::get()).map(|| {
@@ -158,7 +158,7 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
   if let Some(error) = err.find::<s3_signer::Error>() {
     log::error!("{}", error);
   } else {
-    log::error!("Unhandled rejetion: {:?}", err);
+    log::error!("Unhandled rejection: {:?}", err);
   }
   Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }

@@ -15,7 +15,7 @@ pub struct CreateUploadResponse {
 #[cfg(feature = "server")]
 pub(crate) mod server {
   use super::{CreateUploadQueryParameters, CreateUploadResponse};
-  use crate::{to_ok_json_response, upload::S3Client, Error, S3Configuration};
+  use crate::{to_ok_json_response, multipart_upload::S3Client, Error, S3Configuration};
   use rusoto_s3::{CreateMultipartUploadRequest, S3};
   use std::convert::TryFrom;
   use warp::{

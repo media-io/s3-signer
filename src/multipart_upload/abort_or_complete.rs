@@ -35,7 +35,7 @@ pub(crate) mod server {
   use super::{
     AbortOrCompleteUploadBody, AbortOrCompleteUploadQueryParameters, CompletedUploadPart,
   };
-  use crate::{upload::S3Client, Error, S3Configuration};
+  use crate::{multipart_upload::S3Client, Error, S3Configuration};
   use rusoto_s3::{
     AbortMultipartUploadRequest, CompleteMultipartUploadRequest, CompletedMultipartUpload,
     CompletedPart, S3,
