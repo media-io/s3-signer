@@ -1,11 +1,11 @@
 #[cfg(feature = "server")]
 mod error;
+pub mod multipart_upload;
 pub mod objects;
 #[cfg(feature = "server")]
 mod open_api;
 #[cfg(feature = "server")]
 mod s3_configuration;
-pub mod multipart_upload;
 
 #[cfg(feature = "server")]
 pub use server::*;
@@ -17,10 +17,7 @@ mod server {
   use serde::Serialize;
   use warp::{
     hyper::{
-      header::{
-        ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
-        CONTENT_TYPE, LOCATION,
-      },
+      header::{ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_ORIGIN, CONTENT_TYPE, LOCATION},
       Body, Response, StatusCode,
     },
     Filter, Rejection, Reply,
@@ -36,10 +33,6 @@ mod server {
     warp::hyper::Response::builder()
       .header(ACCESS_CONTROL_ALLOW_HEADERS, "*")
       .header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-      .header(
-        ACCESS_CONTROL_ALLOW_METHODS,
-        "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-      )
   }
 
   pub(crate) fn to_ok_json_response<T>(body_response: &T) -> Result<Response<Body>, Rejection>
