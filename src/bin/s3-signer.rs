@@ -4,7 +4,7 @@ use simple_logger::SimpleLogger;
 use std::convert::Infallible;
 use utoipa::OpenApi;
 use warp::{
-  hyper::{header::{ALLOW, ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_ORIGIN}, Body, StatusCode},
+  hyper::{header::ACCESS_CONTROL_ALLOW_METHODS, Body, StatusCode},
   Filter, Rejection, Reply,
 };
 
@@ -132,9 +132,7 @@ fn root() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
 fn options() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
   warp::options().map(|| {
     s3_signer::request_builder()
-      .header(ALLOW, "GET, OPTIONS, POST, PUT")
-      .header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-      .header(ACCESS_CONTROL_ALLOW_HEADERS, "*")
+      .header(ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS, POST, PUT")
       .body(Body::empty())
       .unwrap()
   })
