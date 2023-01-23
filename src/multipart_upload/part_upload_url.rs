@@ -6,10 +6,15 @@ pub struct PartUploadQueryParameters {
   pub path: String,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PartUploadResponse {
+  pub presigned_url: String,
+}
+
 #[cfg(feature = "server")]
 pub(crate) mod server {
-  use super::PartUploadQueryParameters;
-  use crate::{to_redirect_response, S3Configuration};
+  use super::{PartUploadQueryParameters, PartUploadResponse};
+  use crate::{to_ok_json_response, S3Configuration};
   use rusoto_credential::AwsCredentials;
   use rusoto_s3::{
     util::{PreSignedRequest, PreSignedRequestOption},
@@ -22,12 +27,12 @@ pub(crate) mod server {
 
   /// Pre-sign part upload URL
   #[utoipa::path(
-    put,
+    get,
     context_path = "/multipart-upload",
     path = "/{upload_id}/part/{part_number}",
     tag = "Multipart upload",
     responses(
-      (status = 302, description = "Redirect to pre-signed URL for getting an object"),
+      (status = 200, description = "Returns the pre-signed URL for getting an object"),
     ),
     params(
       ("upload_id" = String, Path, description = "ID of the upload"),
@@ -41,7 +46,7 @@ pub(crate) mod server {
   ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     let s3_configuration = s3_configuration.clone();
     warp::path!(String / "part" / i64)
-      .and(warp::put())
+      .and(warp::get())
       .and(warp::query::<PartUploadQueryParameters>())
       .and(warp::any().map(move || s3_configuration.clone()))
       .and_then(
@@ -89,6 +94,7 @@ pub(crate) mod server {
       &PreSignedRequestOption::default(),
     );
 
-    to_redirect_response(&presigned_url)
+    let response = PartUploadResponse { presigned_url };
+    to_ok_json_response(&response)
   }
 }
