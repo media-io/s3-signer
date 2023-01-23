@@ -6,7 +6,7 @@ pub use abort_or_complete::{
   AbortOrCompleteUploadBody, AbortOrCompleteUploadQueryParameters, CompletedUploadPart,
 };
 pub use create::{CreateUploadQueryParameters, CreateUploadResponse};
-pub use part_upload_url::PartUploadQueryParameters;
+pub use part_upload_url::{PartUploadQueryParameters, PartUploadResponse};
 
 #[cfg(feature = "server")]
 pub(crate) use server::{routes, S3Client};
