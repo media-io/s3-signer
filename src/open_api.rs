@@ -25,6 +25,7 @@ use warp::{
     schemas(
       crate::objects::list::Object,
       crate::multipart_upload::create::CreateUploadResponse,
+      crate::multipart_upload::part_upload_url::PartUploadResponse,
       crate::multipart_upload::abort_or_complete::CompletedUploadPart,
       crate::multipart_upload::abort_or_complete::AbortOrCompleteUploadBody,
      )
