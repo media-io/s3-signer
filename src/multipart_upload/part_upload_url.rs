@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PartUploadQueryParameters {
@@ -6,7 +7,7 @@ pub struct PartUploadQueryParameters {
   pub path: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct PartUploadResponse {
   pub presigned_url: String,
 }
@@ -32,7 +33,12 @@ pub(crate) mod server {
     path = "/{upload_id}/part/{part_number}",
     tag = "Multipart upload",
     responses(
-      (status = 200, description = "Returns the pre-signed URL for getting an object"),
+      (
+        status = 200,
+        description = "Returns the pre-signed URL for getting an object",
+        content_type = "application/json",
+        body = PartUploadResponse
+      ),
     ),
     params(
       ("upload_id" = String, Path, description = "ID of the upload"),
