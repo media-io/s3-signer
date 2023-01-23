@@ -35,14 +35,14 @@ pub(crate) mod server {
   use super::{
     AbortOrCompleteUploadBody, AbortOrCompleteUploadQueryParameters, CompletedUploadPart,
   };
-  use crate::{multipart_upload::S3Client, Error, S3Configuration};
+  use crate::{multipart_upload::S3Client, to_ok_json_response, Error, S3Configuration};
   use rusoto_s3::{
     AbortMultipartUploadRequest, CompleteMultipartUploadRequest, CompletedMultipartUpload,
     CompletedPart, S3,
   };
   use std::convert::TryFrom;
   use warp::{
-    hyper::{Body, Response, StatusCode},
+    hyper::{Body, Response},
     Filter, Rejection, Reply,
   };
 
@@ -128,8 +128,8 @@ pub(crate) mod server {
         client
           .abort_multipart_upload(request)
           .await
-          .map(|_output| StatusCode::OK.into_response())
           .map_err(|error| warp::reject::custom(Error::MultipartUploadAbortionError(error)))
+          .and_then(|_output| to_ok_json_response(&()))
       })
       .await
   }
@@ -159,8 +159,8 @@ pub(crate) mod server {
         client
           .complete_multipart_upload(request)
           .await
-          .map(|_output| StatusCode::OK.into_response())
           .map_err(|error| warp::reject::custom(Error::MultipartUploadCompletionError(error)))
+          .and_then(|_output| to_ok_json_response(&()))
       })
       .await
   }
