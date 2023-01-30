@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PartUploadQueryParameters {
@@ -7,7 +6,8 @@ pub struct PartUploadQueryParameters {
   pub path: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "server", derive(utoipa::ToSchema))]
 pub struct PartUploadResponse {
   pub presigned_url: String,
 }

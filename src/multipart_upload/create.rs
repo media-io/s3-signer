@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CreateUploadQueryParameters {
@@ -7,7 +6,8 @@ pub struct CreateUploadQueryParameters {
   pub path: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "server", derive(utoipa::ToSchema))]
 pub struct CreateUploadResponse {
   pub upload_id: String,
 }
