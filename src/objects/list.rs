@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ListObjectsQueryParameters {
@@ -9,7 +8,8 @@ pub struct ListObjectsQueryParameters {
 
 pub type ListObjectsResponse = Vec<Object>;
 
-#[derive(Debug, Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "server", derive(utoipa::ToSchema))]
 pub struct Object {
   pub path: String,
   pub is_dir: bool,

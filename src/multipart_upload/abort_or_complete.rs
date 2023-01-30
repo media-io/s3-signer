@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AbortOrCompleteUploadQueryParameters {
@@ -7,14 +6,16 @@ pub struct AbortOrCompleteUploadQueryParameters {
   pub path: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "server", derive(utoipa::ToSchema))]
 #[serde(tag = "action")]
 pub enum AbortOrCompleteUploadBody {
   Abort,
   Complete { parts: Vec<CompletedUploadPart> },
 }
 
-#[derive(Debug, Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "server", derive(utoipa::ToSchema))]
 pub struct CompletedUploadPart {
   pub number: i64,
   pub etag: String,
